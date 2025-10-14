@@ -7,24 +7,30 @@
 <style>
   :root { --accent:#2b7cff; --bg:#f6f8fb; --card:#ffffff; --danger:#e55353; }
   body{ margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:var(--bg); color:#111;}
-  header{ background:var(--accent); color:white; padding:14px 16px; display:flex; align-items:center; gap:12px;}
-  header h1{ font-size:18px; margin:0; }
+  header{ background:var(--accent); color:white; padding:14px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  header h1{ font-size:18px; margin:0; flex:1; min-width:200px; }
   main{ padding:14px; max-width:900px; margin:0 auto;}
   .card{ background:var(--card); border-radius:10px; padding:12px; box-shadow:0 6px 18px rgba(20,30,40,0.06); margin-bottom:12px;}
   label{ display:block; font-size:13px; margin-bottom:6px; }
   input,select,textarea,button{ width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box; font-size:14px;}
-  .row{ display:flex; gap:8px; }
-  .row > *{ flex:1; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap;}
+  .row > *{ flex:1; min-width:140px;}
   .muted{ color:#666; font-size:13px; }
-  .turn{ border-left:4px solid var(--accent); padding:10px; margin-bottom:8px; border-radius:6px; background:#fff; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .turn{ border-left:4px solid var(--accent); padding:10px; margin-bottom:8px; border-radius:6px; background:#fff; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;}
   .small{ font-size:13px; color:#444; }
   .btn{ background:var(--accent); color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer;}
   .btn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--accent); }
   .btn.danger{ background:var(--danger); }
   footer{ text-align:center; color:#777; font-size:13px; margin-top:8px;}
-  nav{ display:flex; gap:8px; margin-bottom:10px; }
-  nav button{ padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:white; }
-  @media(min-width:700px){ header h1{ font-size:20px } .card{ padding:18px } }
+  nav{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  nav button{ padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:white; flex:1; min-width:120px;}
+  .calendar-wrapper { width: 100%; overflow-x: auto; border-radius: 10px; }
+  #calendar { min-width: 600px; }
+  @media (max-width:700px){
+    header h1{ font-size:16px }
+    .card{ padding:14px }
+    #calendar { min-width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -34,16 +40,11 @@
 </header>
 
 <main>
-  <!-- Login -->
   <div id="loginView" class="card">
     <h2>Iniciar sesión</h2>
     <p class="muted">Usa admin/admin (administrador) o user1/pass1 (empleado).</p>
-    <label>Usuario
-      <input id="loginUser" type="text" placeholder="usuario">
-    </label>
-    <label>Contraseña
-      <input id="loginPass" type="password" placeholder="contraseña">
-    </label>
+    <label>Usuario <input id="loginUser" type="text" placeholder="usuario"></label>
+    <label>Contraseña <input id="loginPass" type="password" placeholder="contraseña"></label>
     <div style="display:flex;gap:8px;">
       <button id="btnLogin" class="btn">Entrar</button>
       <button id="btnDemo" class="btn ghost">Entrar como demo</button>
@@ -51,17 +52,14 @@
     <div id="loginError" style="display:none;color:var(--danger);margin-top:8px;"></div>
   </div>
 
-  <!-- App -->
   <div id="appView" style="display:none;">
     <div class="card" id="meCard">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <div>
           <div id="meName" style="font-weight:700"></div>
           <div id="meRole" class="muted small"></div>
         </div>
-        <div>
-          <button id="btnLogout" class="btn ghost">Cerrar sesión</button>
-        </div>
+        <button id="btnLogout" class="btn ghost">Cerrar sesión</button>
       </div>
     </div>
 
@@ -72,7 +70,6 @@
     </nav>
 
     <div id="content"></div>
-
   </div>
 
   <footer class="muted">Demo creado a partir del PDF de la actividad de Arquitectura de Software.</footer>
@@ -83,294 +80,225 @@
 const API = window.location.origin;
 let state = { token: null, user: null };
 
-function setToken(t) {
-  state.token = t;
-  if (t) localStorage.setItem('rt_token', t);
-  else localStorage.removeItem('rt_token');
-}
-function loadToken() {
-  const t = localStorage.getItem('rt_token');
-  if (t) { state.token = t; return true; }
-  return false;
-}
-async function api(path, method='GET', body) {
-  const headers = { 'Content-Type':'application/json' };
-  if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
-  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  if (res.status === 401) { logout(); throw new Error('No autorizado'); }
-  const j = await res.json();
-  if (!res.ok) throw j;
+function setToken(t){ state.token=t; if(t) localStorage.setItem('rt_token',t); else localStorage.removeItem('rt_token'); }
+function loadToken(){ const t=localStorage.getItem('rt_token'); if(t){ state.token=t; return true;} return false; }
+
+async function api(path, method='GET', body){
+  const headers={'Content-Type':'application/json'};
+  if(state.token) headers['Authorization']='Bearer '+state.token;
+  const res=await fetch(API+path,{method,headers,body:body?JSON.stringify(body):undefined});
+  if(res.status===401){ logout(); throw new Error('No autorizado'); }
+  const j=await res.json().catch(()=>({}));
+  if(!res.ok) throw j; 
   return j;
 }
 
-// UI helpers
-function showLogin() {
-  document.getElementById('loginView').style.display = 'block';
-  document.getElementById('appView').style.display = 'none';
-}
-function showApp() {
-  document.getElementById('loginView').style.display = 'none';
-  document.getElementById('appView').style.display = 'block';
-}
+function showLogin(){ document.getElementById('loginView').style.display='block'; document.getElementById('appView').style.display='none'; }
+function showApp(){ document.getElementById('loginView').style.display='none'; document.getElementById('appView').style.display='block'; }
 
 // === LOGIN ===
-async function login(username, password) {
-  try {
-    const r = await api('/api/login', 'POST', { username, password });
-    setToken(r.token);
-    state.user = r.user;
-    await afterLogin();
-  } catch(e) {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('loginError').innerText = e.error || (e.message || 'Error login');
+async function login(username,password){
+  try{
+    const r=await api('/api/login','POST',{username,password});
+    setToken(r.token); state.user=r.user; await afterLogin();
+  }catch(e){
+    const err=document.getElementById('loginError');
+    err.style.display='block'; err.innerText=e.error||(e.message||'Error login');
   }
 }
 
-async function afterLogin() {
-  try {
-    const me = await api('/api/me');
-    state.user = me;
-    document.getElementById('meName').innerText = me.name || me.username;
-    document.getElementById('meRole').innerText = me.role === 'admin' ? 'Administrador' : 'Empleado';
-    document.getElementById('navAdmin').style.display = (me.role === 'admin') ? 'inline-block' : 'none';
-    showApp();
-    loadTurnsView();
-  } catch(e) {
-    console.error(e);
-    logout();
-  }
+async function afterLogin(){
+  try{
+    const me=await api('/api/me');
+    state.user=me;
+    document.getElementById('meName').innerText=me.name||me.username;
+    document.getElementById('meRole').innerText=me.role==='admin'?'Administrador':'Empleado';
+    document.getElementById('navAdmin').style.display=(me.role==='admin')?'inline-block':'none';
+    showApp(); loadTurnsView();
+  }catch(e){ logout(); }
 }
 
-function logout() {
-  setToken(null);
-  state.user = null;
-  showLogin();
-}
+function logout(){ setToken(null); state.user=null; showLogin(); }
 
 // === CALENDARIO ===
-function renderCalendar(turns) {
+function renderCalendar(turns){
   const content = document.getElementById('calendarContainer');
-  content.innerHTML = `<div class="card"><h3>Calendario de Turnos</h3><div id="calendar"></div></div>`;
-  const calendarEl = document.getElementById('calendar');
-  const events = turns.map(t => ({
-    title: t.name + (t.area ? ' · ' + t.area : ''),
-    start: t.startDate || t.start,
-    end: t.endDate || t.end,
-    extendedProps: t
-  }));
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
-    height: 'auto',
-    locale: 'es',
-    headerToolbar: {
-      left: 'prev,next today',
-      center: 'title',
-      right: 'dayGridMonth,timeGridWeek,listWeek'
-    },
-    events,
-    eventClick: function(info) {
-      const t = info.event.extendedProps;
-      alert(`Turno: ${t.name}\nÁrea: ${t.area || '-'}\nHorario: ${t.start} - ${t.end}\nDías: ${(t.days||[]).join(', ')}`);
-    }
+  content.innerHTML = `
+    <div class="card">
+      <h3>Calendario de Turnos</h3>
+      <div class="calendar-wrapper">
+        <div id="calendar"></div>
+      </div>
+    </div>`;
+  const events = turns.flatMap(t => {
+    if (!t.days) return [];
+    const dayMap = { D:0, L:1, M:2, X:3, J:4, V:5, S:6 };
+    const today = new Date();
+    const y = today.getFullYear(), m = today.getMonth();
+    return t.days.map(d => {
+      const dow = dayMap[d.toUpperCase()];
+      if (dow === undefined) return null;
+      const first = new Date(y,m,1);
+      const offset = (dow - first.getDay() + 7) % 7;
+      const firstMatch = new Date(y,m,1+offset);
+      const evs=[];
+      for(let dt=new Date(firstMatch); dt.getMonth()===m; dt.setDate(dt.getDate()+7)){
+        evs.push({
+          title:t.name+(t.area?' · '+t.area:''),
+          start:new Date(dt),
+          allDay:true,
+          backgroundColor:'#2b7cff',
+          borderColor:'#2b7cff',
+          textColor:'white',
+          extendedProps:t
+        });
+      }
+      return evs;
+    }).flat().filter(Boolean);
+  });
+  const calendar=new FullCalendar.Calendar(document.getElementById('calendar'),{
+    initialView:'dayGridMonth',
+    locale:'es',
+    height:'auto',
+    events
   });
   calendar.render();
 }
 
-// === TURNOS (VISTA PRINCIPAL) ===
-async function loadTurnsView() {
-  const content = document.getElementById('content');
-  content.innerHTML = '<div class="card"><h3>Turnos</h3><p class="muted">Cargando...</p></div>';
-  try {
-    let turns;
-    if (state.user.role === 'admin') {
-      turns = await api('/api/turns');
-    } else {
-      turns = await api('/api/turns?assignedTo=' + encodeURIComponent(state.user.id));
-    }
-
-    let html = `<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+// === TURNOS ===
+async function loadTurnsView(){
+  const content=document.getElementById('content');
+  content.innerHTML='<div class="card"><h3>Turnos</h3><p class="muted">Cargando...</p></div>';
+  try{
+    const turns= state.user.role==='admin' ? await api('/api/turns') : await api('/api/turns?assignedTo='+encodeURIComponent(state.user.id));
+    let filteredTurns=[...turns];
+    let html=`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
         <h3>Turnos asignados</h3>
-        ${state.user.role === 'admin' ? '<button class="btn" onclick="showCreateTurn()">➕ Nuevo turno</button>' : ''}
-      </div>`;
+        ${state.user.role==='admin'?'<button class="btn" onclick="showCreateTurn()">➕ Nuevo turno</button>':''}
+      </div>
+      <div style="margin-top:10px">
+        ${state.user.role==='admin'?'<input id="searchInput" type="text" placeholder="Buscar..." oninput="filterTurns(this.value)" style="padding:8px;border:1px solid #ccc;border-radius:8px;width:100%">':''}
+      </div>
+      <div id="turnsList" style="margin-top:12px"></div>
+    </div>
+    <div style="margin-top:20px" id="calendarContainer"></div>`;
+    content.innerHTML=html;
 
-    if (!turns.length) html += '<p class="muted">No hay turnos asignados.</p>';
-
-    turns.forEach(t => {
-      html += `
+    window.renderTurnList=(list)=>{
+      const listEl=document.getElementById('turnsList');
+      if(!list.length){listEl.innerHTML='<p class="muted">No hay turnos.</p>';return;}
+      listEl.innerHTML=list.map(t=>`
         <div class="turn">
           <div>
-            <div style="font-weight:700">${t.name || 'Sin nombre'}</div>
-            <div class="small">${t.start} - ${t.end} · ${t.area || ''}</div>
-            <div class="muted small">Días: ${t.days ? t.days.join(', ') : '-'}</div>
+            <div style="font-weight:700">${t.name||'Sin nombre'}</div>
+            <div class="small">${t.start||'-'} - ${t.end||'-'} · ${t.area||''}</div>
+            <div class="muted small">Asignado: ${t.assignedTo||'Nadie'} · Días: ${(t.days||[]).join(', ')}</div>
           </div>
-          <div style="min-width:140px;text-align:right">`;
+          <div style="min-width:140px;text-align:right">
+            ${state.user.role==='admin'
+              ? `<button class="btn" onclick="showEditTurn(${t.id})">Editar</button>
+                 <div style="height:8px"></div>
+                 <button class="btn danger" onclick="deleteTurn(${t.id})">Borrar</button>`
+              : '<div class="muted small">Empleado</div>'}
+          </div>
+        </div>`).join('');
+    };
 
-      if (state.user.role === 'admin') {
-        html += `
-          <button class="btn" onclick="showEditTurn(${t.id})">Editar</button>
-          <div style="height:8px"></div>
-          <button class="btn danger" onclick="deleteTurn(${t.id})">Borrar</button>`;
-      } else if (t.assignedTo) {
-        html += `
-          <button class="btn" onclick="confirmTurn(${t.id})">Confirmar</button>
-          <div style="height:8px"></div>
-          <button class="btn ghost" onclick="showRequestForm(${t.id})">Solicitar cambio</button>`;
-      } else {
-        html += `<div class="muted small">No asignado</div>`;
-      }
+    window.filterTurns=(q)=>{
+      const query=q.toLowerCase();
+      const filtered=turns.filter(t=>(t.name||'').toLowerCase().includes(query)||(t.area||'').toLowerCase().includes(query));
+      filteredTurns=filtered;
+      renderTurnList(filteredTurns);
+      renderCalendar(filteredTurns);
+    };
 
-      html += `</div></div>`;
-    });
-
-    html += `</div><div style="margin-top:20px" id="calendarContainer"></div>`;
-    content.innerHTML = html;
-    renderCalendar(turns);
-
-  } catch(e) {
-    content.innerHTML = '<div class="card"><p class="muted">Error al cargar turnos.</p></div>';
+    renderTurnList(filteredTurns);
+    renderCalendar(filteredTurns);
+  }catch(e){
+    content.innerHTML='<div class="card"><p class="muted">Error al cargar turnos.</p></div>';
   }
 }
 
-// === CREAR TURNO ===
-function showCreateTurn() {
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="card">
-      <h3>Nuevo turno</h3>
-      <label>Nombre <input id="t_name" placeholder="Ej. Turno mañana"></label>
-      <div class="row">
-        <label>Inicio <input id="t_start" placeholder="2025-10-13T06:00"></label>
-        <label>Fin <input id="t_end" placeholder="2025-10-13T14:00"></label>
-      </div>
-      <label>Días (separados por comas) <input id="t_days" placeholder="L,M,X,J,V"></label>
-      <label>Área <input id="t_area" placeholder="Ej. Producción"></label>
-      <label>Asignado a (id de usuario, opcional) <input id="t_assigned" placeholder="Ej. 3"></label>
-      <div style="display:flex;gap:8px;margin-top:10px">
+function val(id){return document.getElementById(id).value.trim();}
+
+// === CREAR / EDITAR ===
+function showCreateTurn(){
+  document.getElementById('content').innerHTML=`
+    <div class="card"><h3>Nuevo turno</h3>
+      <label>Nombre <input id="t_name"></label>
+      <div class="row"><label>Inicio <input id="t_start"></label><label>Fin <input id="t_end"></label></div>
+      <label>Días (L,M,X,J,V) <input id="t_days"></label>
+      <label>Área <input id="t_area"></label>
+      <label>Asignado a (id usuario) <input id="t_assigned"></label>
+      <div style="display:flex;gap:8px">
         <button class="btn" onclick="createTurn()">Guardar</button>
         <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
       </div>
-    </div>
-  `;
-}
-async function createTurn() {
-  const body = {
-    name: document.getElementById('t_name').value.trim(),
-    start: document.getElementById('t_start').value.trim(),
-    end: document.getElementById('t_end').value.trim(),
-    days: (document.getElementById('t_days').value || '').split(',').map(s=>s.trim()).filter(Boolean),
-    area: document.getElementById('t_area').value.trim(),
-    assignedTo: document.getElementById('t_assigned').value ? Number(document.getElementById('t_assigned').value) : null,
-    status: 'active'
-  };
-  if (!body.name || !body.start || !body.end) {
-    alert('Por favor completa los campos obligatorios.');
-    return;
-  }
-  try {
-    await api('/api/turns','POST',body);
-    alert('Turno creado correctamente.');
-    loadTurnsView();
-  } catch(e) { alert(e.error || 'Error al crear el turno.'); }
+    </div>`;
 }
 
-// === BORRAR TURNO ===
-async function deleteTurn(id) {
-  if (!confirm('¿Eliminar turno #' + id + '?')) return;
-  try {
-    await api('/api/turns/' + id, 'DELETE');
+async function createTurn(){
+  const body={name:val('t_name'),start:val('t_start'),end:val('t_end'),
+    days:(val('t_days')||'').split(',').map(s=>s.trim()).filter(Boolean),
+    area:val('t_area'),assignedTo:val('t_assigned')||null,status:'active'};
+  if(!body.name||!body.start||!body.end){alert('Completa los campos obligatorios');return;}
+  await api('/api/turns','POST',body);
+  alert('Turno creado.');loadTurnsView();
+}
+
+// ✅ ARREGLADO: botón Editar
+async function showEditTurn(id){
+  try{
+    const t = await api('/api/turns/'+id);
+    const turno = Array.isArray(t) ? t[0] : t;
+    if(!turno){alert('No se encontró el turno');loadTurnsView();return;}
+    document.getElementById('content').innerHTML=`
+      <div class="card"><h3>Editar turno #${id}</h3>
+        <label>Nombre <input id="t_name" value="${turno.name||''}"></label>
+        <div class="row">
+          <label>Inicio <input id="t_start" value="${turno.start||''}"></label>
+          <label>Fin <input id="t_end" value="${turno.end||''}"></label>
+        </div>
+        <label>Días (L,M,X,J,V) <input id="t_days" value="${(turno.days||[]).join(',')}"></label>
+        <label>Área <input id="t_area" value="${turno.area||''}"></label>
+        <label>Asignado a (id usuario) <input id="t_assigned" value="${turno.assignedTo||''}"></label>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="updateTurn(${id})">Guardar cambios</button>
+          <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
+        </div>
+      </div>`;
+  }catch(e){
+    alert('Error al cargar turno para editar');
+    loadTurnsView();
+  }
+}
+
+async function updateTurn(id){
+  const body={name:val('t_name'),start:val('t_start'),end:val('t_end'),
+    days:(val('t_days')||'').split(',').map(s=>s.trim()).filter(Boolean),
+    area:val('t_area'),assignedTo:val('t_assigned')||null};
+  await api('/api/turns/'+id,'PUT',body);
+  alert('Turno actualizado correctamente.');
+  loadTurnsView();
+}
+
+async function deleteTurn(id){
+  if(confirm('¿Eliminar turno #'+id+'?')){
+    await api('/api/turns/'+id,'DELETE');
     alert('Turno eliminado.');
     loadTurnsView();
-  } catch(e) { alert(e.error || 'Error al eliminar turno.'); }
-}
-
-// === EDITAR TURNO ===
-async function showEditTurn(id) {
-  try {
-    const turns = await api('/api/turns');
-    const t = turns.find(x=>x.id===id);
-    if (!t) return alert('No encontrado');
-    const content = document.getElementById('content');
-    content.innerHTML = `
-      <div class="card">
-        <h3>Editar turno #${t.id}</h3>
-        <label>Nombre <input id="t_name" value="${t.name || ''}"></label>
-        <div class="row"><label>Inicio <input id="t_start" value="${t.start || ''}"></label><label>Fin <input id="t_end" value="${t.end || ''}"></label></div>
-        <label>Días (coma separado) <input id="t_days" value="${(t.days||[]).join(',')}"></label>
-        <label>Área <input id="t_area" value="${t.area||''}"></label>
-        <label>Asignado a (id usuario, opcional) <input id="t_assigned" value="${t.assignedTo||''}"></label>
-        <div style="display:flex;gap:8px"><button class="btn" onclick="saveEdit(${t.id})">Guardar</button><button class="btn ghost" onclick="loadTurnsView()">Cancelar</button></div>
-      </div>
-    `;
-  } catch(e) { alert('Error'); }
-}
-async function saveEdit(id) {
-  const body = {
-    name: document.getElementById('t_name').value,
-    start: document.getElementById('t_start').value,
-    end: document.getElementById('t_end').value,
-    days: (document.getElementById('t_days').value || '').split(',').map(s=>s.trim()).filter(Boolean),
-    area: document.getElementById('t_area').value,
-    assignedTo: document.getElementById('t_assigned').value ? Number(document.getElementById('t_assigned').value) : null
-  };
-  try {
-    await api('/api/turns/' + id, 'PUT', body);
-    alert('Guardado.');
-    loadTurnsView();
-  } catch(e) { alert(e.error || 'Error'); }
-}
-
-// === SOLICITUDES (Sin cambios importantes) ===
-async function loadRequestsView() {
-  const content = document.getElementById('content');
-  content.innerHTML = '<div class="card"><h3>Solicitudes</h3><p class="muted">Cargando...</p></div>';
-  try {
-    const reqs = await api('/api/requests');
-    let html = '<div class="card"><h3>Solicitudes</h3>';
-    if (!reqs.length) html += '<p class="muted">Sin solicitudes.</p>';
-    reqs.forEach(r => {
-      html += `<div style="padding:8px;border-bottom:1px solid #eee"><div style="display:flex;justify-content:space-between"><div><strong>ID ${r.id}</strong> · Turno ${r.turnId}</div><div class="muted small">${r.status}</div></div>
-        <div class="muted small">Solicitante: ${r.requesterId} · ${new Date(r.createdAt).toLocaleString()}</div>
-        <div style="margin-top:6px">${r.reason || '<span class="muted">sin motivo</span>'}</div>
-        <div style="margin-top:8px">`;
-      if (state.user.role === 'admin' && r.status === 'pending') {
-        html += `<button class="btn" onclick="decideRequest(${r.id},'approve')">Aprobar</button><button class="btn ghost" style="margin-left:8px" onclick="decideRequest(${r.id},'reject')">Rechazar</button>`;
-      } else {
-        if (r.adminComment) html += `<div class="muted small">Admin: ${r.adminComment}</div>`;
-      }
-      html += `</div></div>`;
-    });
-    html += '</div>';
-    content.innerHTML = html;
-  } catch(e) {
-    content.innerHTML = '<div class="card"><p class="muted">Error al cargar solicitudes.</p></div>';
   }
-}
-async function decideRequest(id, decision) {
-  const comment = prompt('Comentario (opcional):') || '';
-  try {
-    await api('/api/requests/' + id + '/decision', 'POST', { decision, comment });
-    alert('Hecho.');
-    loadRequestsView();
-  } catch(e) { alert(e.error || 'Error'); }
 }
 
 // === Inicialización ===
-document.getElementById('btnLogin').onclick = () => {
-  login(document.getElementById('loginUser').value, document.getElementById('loginPass').value);
-};
-document.getElementById('btnDemo').onclick = () => { login('admin','admin'); };
-document.getElementById('btnLogout').onclick = logout;
-document.getElementById('navTurns').onclick = loadTurnsView;
-document.getElementById('navRequests').onclick = loadRequestsView;
-document.getElementById('navAdmin').onclick = loadTurnsView;
-
-// Auto-login si hay token
-(async function(){
-  if (loadToken()) {
-    try { await afterLogin(); } catch { logout(); }
-  } else showLogin();
-})();
+document.getElementById('btnLogin').onclick=()=>login(val('loginUser'),val('loginPass'));
+document.getElementById('btnDemo').onclick=()=>login('admin','admin');
+document.getElementById('btnLogout').onclick=logout;
+document.getElementById('navTurns').onclick=loadTurnsView;
+document.getElementById('navRequests').onclick=()=>alert('Vista solicitudes');
+document.getElementById('navAdmin').onclick=loadTurnsView;
+(async()=>{if(loadToken())try{await afterLogin();}catch{logout();}else showLogin();})();
 </script>
 </body>
 </html>
