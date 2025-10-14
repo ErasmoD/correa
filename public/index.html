@@ -26,11 +26,6 @@
   nav button{ padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:white; flex:1; min-width:120px;}
   .calendar-wrapper { width: 100%; overflow-x: auto; border-radius: 10px; }
   #calendar { min-width: 600px; }
-  @media (max-width:700px){
-    header h1{ font-size:16px }
-    .card{ padding:14px }
-    #calendar { min-width: 100%; }
-  }
 </style>
 </head>
 <body>
@@ -40,11 +35,12 @@
 </header>
 
 <main>
+  <!-- LOGIN -->
   <div id="loginView" class="card">
     <h2>Iniciar sesión</h2>
-    <p class="muted">Usa admin/admin (administrador) o user1/pass1 (empleado).</p>
-    <label>Usuario <input id="loginUser" type="text" placeholder="usuario"></label>
-    <label>Contraseña <input id="loginPass" type="password" placeholder="contraseña"></label>
+    <p class="muted">Usa <b>admin/admin</b> (administrador) o <b>user1/pass1</b> (empleado).</p>
+    <label>Usuario <input id="loginUser" type="text"></label>
+    <label>Contraseña <input id="loginPass" type="password"></label>
     <div style="display:flex;gap:8px;">
       <button id="btnLogin" class="btn">Entrar</button>
       <button id="btnDemo" class="btn ghost">Entrar como demo</button>
@@ -52,9 +48,10 @@
     <div id="loginError" style="display:none;color:var(--danger);margin-top:8px;"></div>
   </div>
 
+  <!-- APP -->
   <div id="appView" style="display:none;">
     <div class="card" id="meCard">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div id="meName" style="font-weight:700"></div>
           <div id="meRole" class="muted small"></div>
@@ -66,238 +63,261 @@
     <nav>
       <button id="navTurns">Mis turnos</button>
       <button id="navRequests">Solicitudes</button>
+      <button id="navCalendar">Calendario</button>
       <button id="navAdmin" style="display:none">Panel Admin</button>
     </nav>
 
     <div id="content"></div>
   </div>
 
-  <footer class="muted">Demo creado a partir del PDF de la actividad de Arquitectura de Software.</footer>
+  <footer class="muted">Demo creada para la actividad de Arquitectura de Software.</footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-const API = window.location.origin;
-let state = { token: null, user: null };
-
-function setToken(t){ state.token=t; if(t) localStorage.setItem('rt_token',t); else localStorage.removeItem('rt_token'); }
-function loadToken(){ const t=localStorage.getItem('rt_token'); if(t){ state.token=t; return true;} return false; }
-
-async function api(path, method='GET', body){
-  const headers={'Content-Type':'application/json'};
-  if(state.token) headers['Authorization']='Bearer '+state.token;
-  const res=await fetch(API+path,{method,headers,body:body?JSON.stringify(body):undefined});
-  if(res.status===401){ logout(); throw new Error('No autorizado'); }
-  const j=await res.json().catch(()=>({}));
-  if(!res.ok) throw j; 
-  return j;
+/* ================================
+   SIMULACIÓN DE BACKEND LOCAL
+================================ */
+const db = {
+  users: [
+    { id: 1, username: 'admin', password: 'admin', role: 'admin', name: 'Administrador' },
+    { id: 2, username: 'user1', password: 'pass1', role: 'user', name: 'Empleado 1' }
+  ],
+  turns: JSON.parse(localStorage.getItem('rt_turns')) || [
+    { id: 1, name: 'Turno Mañana', start: '08:00', end: '14:00', days: ['L','M','X','J','V'], area: 'Ventas' },
+    { id: 2, name: 'Turno Tarde', start: '14:00', end: '20:00', days: ['L','M','X','J','V'], area: 'Soporte' }
+  ],
+  requests: JSON.parse(localStorage.getItem('rt_requests')) || []
+};
+function saveDB(){
+  localStorage.setItem('rt_turns', JSON.stringify(db.turns));
+  localStorage.setItem('rt_requests', JSON.stringify(db.requests));
 }
 
-function showLogin(){ document.getElementById('loginView').style.display='block'; document.getElementById('appView').style.display='none'; }
-function showApp(){ document.getElementById('loginView').style.display='none'; document.getElementById('appView').style.display='block'; }
+/* ================================
+   API SIMULADA
+================================ */
+async function api(path,method='GET',body){
+  await new Promise(r=>setTimeout(r,100));
+  if(path==='/api/login' && method==='POST'){
+    const u=db.users.find(x=>x.username===body.username && x.password===body.password);
+    if(!u) return Promise.reject({error:'Credenciales inválidas'});
+    return {token:'demo-token', user:u};
+  }
+  if(path==='/api/me') return state.user;
+
+  if(path.startsWith('/api/turns')){
+    if(method==='GET') return db.turns;
+    if(method==='POST'){ const n={id:Date.now(),...body}; db.turns.push(n); saveDB(); return n; }
+    const id=parseInt(path.split('/').pop());
+    if(method==='PUT'){ const i=db.turns.findIndex(t=>t.id===id); if(i>-1){db.turns[i]={...db.turns[i],...body}; saveDB();} return db.turns[i]; }
+    if(method==='DELETE'){ db.turns=db.turns.filter(t=>t.id!==id); saveDB(); return {}; }
+  }
+
+  if(path==='/api/requests' && method==='GET') return db.requests;
+  if(path==='/api/requests' && method==='POST'){ const n={id:Date.now(),...body}; db.requests.push(n); saveDB(); return n; }
+  if(path.includes('/approve') && method==='POST'){ const id=parseInt(path.split('/')[3]); const r=db.requests.find(x=>x.id===id); if(r){r.status='aprobada'; saveDB(); return r;} }
+  if(path.includes('/reject') && method==='POST'){ const id=parseInt(path.split('/')[3]); const r=db.requests.find(x=>x.id===id); if(r){r.status='rechazada'; saveDB(); return r;} }
+
+  return Promise.reject({error:'Ruta no encontrada '+path});
+}
+
+/* ================================
+   FRONTEND
+================================ */
+let state = { token:null, user:null };
+function setToken(t){ state.token=t; if(t) localStorage.setItem('rt_token',t); else localStorage.removeItem('rt_token'); }
+function loadToken(){ const t=localStorage.getItem('rt_token'); if(t){state.token=t;return true;} return false; }
+
+function showLogin(){document.getElementById('loginView').style.display='block';document.getElementById('appView').style.display='none';}
+function showApp(){document.getElementById('loginView').style.display='none';document.getElementById('appView').style.display='block';}
 
 // === LOGIN ===
-async function login(username,password){
+async function login(u,p){
   try{
-    const r=await api('/api/login','POST',{username,password});
+    const r=await api('/api/login','POST',{username:u,password:p});
     setToken(r.token); state.user=r.user; await afterLogin();
-  }catch(e){
-    const err=document.getElementById('loginError');
-    err.style.display='block'; err.innerText=e.error||(e.message||'Error login');
-  }
+  }catch(e){const err=document.getElementById('loginError');err.style.display='block';err.innerText=e.error||'Error login';}
 }
-
 async function afterLogin(){
-  try{
-    const me=await api('/api/me');
-    state.user=me;
-    document.getElementById('meName').innerText=me.name||me.username;
-    document.getElementById('meRole').innerText=me.role==='admin'?'Administrador':'Empleado';
-    document.getElementById('navAdmin').style.display=(me.role==='admin')?'inline-block':'none';
-    showApp(); loadTurnsView();
-  }catch(e){ logout(); }
+  document.getElementById('meName').innerText=state.user.name;
+  document.getElementById('meRole').innerText=state.user.role==='admin'?'Administrador':'Empleado';
+  document.getElementById('navAdmin').style.display=(state.user.role==='admin')?'inline-block':'none';
+  showApp(); loadTurnsView();
+}
+function logout(){setToken(null);state.user=null;showLogin();}
+
+// === TURNOS ===
+async function loadTurnsView(){
+  const c=document.getElementById('content');
+  const turns=await api('/api/turns');
+  c.innerHTML=`<div class="card"><h3>Turnos</h3><div id="turnsList"></div></div>`;
+  const list=document.getElementById('turnsList');
+  list.innerHTML=turns.map(t=>`
+    <div class="turn">
+      <div>
+        <div style="font-weight:700">${t.name}</div>
+        <div class="small">${t.start} - ${t.end} · ${t.area||''}</div>
+        <div class="muted small">Días: ${(t.days||[]).join(', ')}</div>
+      </div>
+      <div>${state.user.role==='admin'
+        ? `<button class="btn" onclick="showEditTurn(${t.id})">Editar</button>
+           <div style='height:6px'></div>
+           <button class='btn danger' onclick='deleteTurn(${t.id})'>Borrar</button>`
+        : `<button class="btn ghost" onclick="requestChange(${t.id})">Solicitar cambio</button>`}
+      </div>
+    </div>`).join('');
 }
 
-function logout(){ setToken(null); state.user=null; showLogin(); }
+/* === NUEVO: FORMULARIO DE SOLICITUD === */
+async function requestChange(turnId){
+  const turns=await api('/api/turns');
+  const fromTurn=turns.find(t=>t.id===turnId);
+  if(!fromTurn) return alert("Turno no encontrado");
+
+  const c=document.getElementById('content');
+  c.innerHTML=`
+  <div class="card">
+    <h3>Solicitar cambio de turno</h3>
+    <p class="small muted">Tu turno actual: <b>${fromTurn.name}</b> (${fromTurn.start} - ${fromTurn.end})</p>
+    <label>Turno deseado
+      <select id="toTurn">
+        ${turns.filter(t=>t.id!==turnId).map(t=>`<option value="${t.name}">${t.name} (${t.area})</option>`).join('')}
+      </select>
+    </label>
+    <label>Motivo
+      <textarea id="reason" placeholder="Explica brevemente el motivo"></textarea>
+    </label>
+    <div class="row">
+      <button class="btn" onclick="sendRequest(${turnId})">Enviar solicitud</button>
+      <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
+    </div>
+  </div>`;
+}
+
+async function sendRequest(fromId){
+  const reason=document.getElementById('reason').value.trim();
+  const toTurn=document.getElementById('toTurn').value;
+  if(!reason) return alert("Por favor, explica el motivo del cambio.");
+
+  const turns=await api('/api/turns');
+  const fromTurn=turns.find(t=>t.id===fromId);
+  await api('/api/requests','POST',{
+    user: state.user.name,
+    fromTurn: fromTurn.name,
+    toTurn: toTurn,
+    reason: reason,
+    status: 'pendiente'
+  });
+  alert('✅ Solicitud enviada correctamente');
+  loadTurnsView();
+}
 
 // === CALENDARIO ===
-function renderCalendar(turns){
-  const content = document.getElementById('calendarContainer');
-  content.innerHTML = `
-    <div class="card">
-      <h3>Calendario de Turnos</h3>
-      <div class="calendar-wrapper">
-        <div id="calendar"></div>
-      </div>
-    </div>`;
-  const events = turns.flatMap(t => {
-    if (!t.days) return [];
-    const dayMap = { D:0, L:1, M:2, X:3, J:4, V:5, S:6 };
-    const today = new Date();
-    const y = today.getFullYear(), m = today.getMonth();
-    return t.days.map(d => {
-      const dow = dayMap[d.toUpperCase()];
-      if (dow === undefined) return null;
-      const first = new Date(y,m,1);
-      const offset = (dow - first.getDay() + 7) % 7;
-      const firstMatch = new Date(y,m,1+offset);
-      const evs=[];
-      for(let dt=new Date(firstMatch); dt.getMonth()===m; dt.setDate(dt.getDate()+7)){
-        evs.push({
-          title:t.name+(t.area?' · '+t.area:''),
-          start:new Date(dt),
-          allDay:true,
-          backgroundColor:'#2b7cff',
-          borderColor:'#2b7cff',
-          textColor:'white',
-          extendedProps:t
-        });
-      }
-      return evs;
-    }).flat().filter(Boolean);
-  });
-  const calendar=new FullCalendar.Calendar(document.getElementById('calendar'),{
-    initialView:'dayGridMonth',
+async function loadCalendarView(){
+  const c=document.getElementById('content');
+  c.innerHTML='<div class="card"><h3>Calendario de Turnos</h3><div class="calendar-wrapper"><div id="calendar"></div></div></div>';
+  const turns=await api('/api/turns');
+  const events=turns.map(t=>({
+    title:t.name+' ('+(t.area||'')+')',
+    daysOfWeek:[1,2,3,4,5],
+    startTime:t.start,
+    endTime:t.end,
+    color: t.area==='Soporte' ? '#2b7cff' : '#28a745'
+  }));
+  const calendarEl=document.getElementById('calendar');
+  const calendar=new FullCalendar.Calendar(calendarEl,{
+    initialView:'timeGridWeek',
+    slotMinTime:'07:00:00',
+    slotMaxTime:'22:00:00',
+    allDaySlot:false,
     locale:'es',
     height:'auto',
-    events
+    events:events
   });
   calendar.render();
 }
 
-// === TURNOS ===
-async function loadTurnsView(){
-  const content=document.getElementById('content');
-  content.innerHTML='<div class="card"><h3>Turnos</h3><p class="muted">Cargando...</p></div>';
-  try{
-    const turns= state.user.role==='admin' ? await api('/api/turns') : await api('/api/turns?assignedTo='+encodeURIComponent(state.user.id));
-    let filteredTurns=[...turns];
-    let html=`<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <h3>Turnos asignados</h3>
-        ${state.user.role==='admin'?'<button class="btn" onclick="showCreateTurn()">➕ Nuevo turno</button>':''}
+// === SOLICITUDES ===
+async function loadRequests(){
+  const c=document.getElementById('content');
+  const reqs=await api('/api/requests');
+  c.innerHTML='<div class="card"><h3>Solicitudes de cambio</h3><div id="reqList"></div></div>';
+  const list=document.getElementById('reqList');
+  if(!reqs.length){list.innerHTML='<p class="muted">No hay solicitudes.</p>';return;}
+  list.innerHTML=reqs.map(r=>`
+    <div class="turn">
+      <div>
+        <div><b>${r.user}</b> solicita cambio ${r.fromTurn} → ${r.toTurn}</div>
+        <div class="small">Motivo: ${r.reason}</div>
+        <div class="muted small">Estado: ${r.status}</div>
       </div>
-      <div style="margin-top:10px">
-        ${state.user.role==='admin'?'<input id="searchInput" type="text" placeholder="Buscar..." oninput="filterTurns(this.value)" style="padding:8px;border:1px solid #ccc;border-radius:8px;width:100%">':''}
-      </div>
-      <div id="turnsList" style="margin-top:12px"></div>
+      ${state.user.role==='admin' && (r.status==='pendiente'||r.status==='pending')
+        ? `<div style="display:flex;flex-direction:column;gap:6px;">
+            <button class="btn" onclick="approveRequest(${r.id})">Aceptar</button>
+            <button class="btn danger" onclick="rejectRequest(${r.id})">Rechazar</button>
+          </div>` : '' }
+    </div>`).join('');
+}
+async function approveRequest(id){await api('/api/requests/'+id+'/approve','POST');alert('✅ Solicitud aprobada');loadRequests();}
+async function rejectRequest(id){await api('/api/requests/'+id+'/reject','POST');alert('❌ Solicitud rechazada');loadRequests();}
+
+// === PANEL ADMIN (IMPORT/EXPORT) ===
+function showAdminPanel(){
+  const c=document.getElementById('content');
+  c.innerHTML=`
+  <div class="card">
+    <h3>Panel del Administrador</h3>
+    <p class="muted">Importa o exporta los registros actuales de turnos y solicitudes.</p>
+    <div class="row">
+      <button class="btn" onclick="exportExcel()">📤 Exportar a Excel</button>
+      <input type="file" id="fileExcel" accept=".xlsx" onchange="importExcel(this)" />
     </div>
-    <div style="margin-top:20px" id="calendarContainer"></div>`;
-    content.innerHTML=html;
-
-    window.renderTurnList=(list)=>{
-      const listEl=document.getElementById('turnsList');
-      if(!list.length){listEl.innerHTML='<p class="muted">No hay turnos.</p>';return;}
-      listEl.innerHTML=list.map(t=>`
-        <div class="turn">
-          <div>
-            <div style="font-weight:700">${t.name||'Sin nombre'}</div>
-            <div class="small">${t.start||'-'} - ${t.end||'-'} · ${t.area||''}</div>
-            <div class="muted small">Asignado: ${t.assignedTo||'Nadie'} · Días: ${(t.days||[]).join(', ')}</div>
-          </div>
-          <div style="min-width:140px;text-align:right">
-            ${state.user.role==='admin'
-              ? `<button class="btn" onclick="showEditTurn(${t.id})">Editar</button>
-                 <div style="height:8px"></div>
-                 <button class="btn danger" onclick="deleteTurn(${t.id})">Borrar</button>`
-              : '<div class="muted small">Empleado</div>'}
-          </div>
-        </div>`).join('');
-    };
-
-    window.filterTurns=(q)=>{
-      const query=q.toLowerCase();
-      const filtered=turns.filter(t=>(t.name||'').toLowerCase().includes(query)||(t.area||'').toLowerCase().includes(query));
-      filteredTurns=filtered;
-      renderTurnList(filteredTurns);
-      renderCalendar(filteredTurns);
-    };
-
-    renderTurnList(filteredTurns);
-    renderCalendar(filteredTurns);
-  }catch(e){
-    content.innerHTML='<div class="card"><p class="muted">Error al cargar turnos.</p></div>';
-  }
+    <hr>
+    <button class="btn ghost" onclick="loadTurnsView()">⬅️ Volver</button>
+  </div>`;
 }
 
-function val(id){return document.getElementById(id).value.trim();}
-
-// === CREAR / EDITAR ===
-function showCreateTurn(){
-  document.getElementById('content').innerHTML=`
-    <div class="card"><h3>Nuevo turno</h3>
-      <label>Nombre <input id="t_name"></label>
-      <div class="row"><label>Inicio <input id="t_start"></label><label>Fin <input id="t_end"></label></div>
-      <label>Días (L,M,X,J,V) <input id="t_days"></label>
-      <label>Área <input id="t_area"></label>
-      <label>Asignado a (id usuario) <input id="t_assigned"></label>
-      <div style="display:flex;gap:8px">
-        <button class="btn" onclick="createTurn()">Guardar</button>
-        <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
-      </div>
-    </div>`;
+// === EXPORTAR E IMPORTAR ===
+function exportExcel(){
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(db.turns);
+  const ws2=XLSX.utils.json_to_sheet(db.requests);
+  XLSX.utils.book_append_sheet(wb,ws1,'Turnos');
+  XLSX.utils.book_append_sheet(wb,ws2,'Solicitudes');
+  XLSX.writeFile(wb,'ReAsignaTurnos.xlsx');
 }
 
-async function createTurn(){
-  const body={name:val('t_name'),start:val('t_start'),end:val('t_end'),
-    days:(val('t_days')||'').split(',').map(s=>s.trim()).filter(Boolean),
-    area:val('t_area'),assignedTo:val('t_assigned')||null,status:'active'};
-  if(!body.name||!body.start||!body.end){alert('Completa los campos obligatorios');return;}
-  await api('/api/turns','POST',body);
-  alert('Turno creado.');loadTurnsView();
-}
-
-// ✅ ARREGLADO: botón Editar
-async function showEditTurn(id){
-  try{
-    const t = await api('/api/turns/'+id);
-    const turno = Array.isArray(t) ? t[0] : t;
-    if(!turno){alert('No se encontró el turno');loadTurnsView();return;}
-    document.getElementById('content').innerHTML=`
-      <div class="card"><h3>Editar turno #${id}</h3>
-        <label>Nombre <input id="t_name" value="${turno.name||''}"></label>
-        <div class="row">
-          <label>Inicio <input id="t_start" value="${turno.start||''}"></label>
-          <label>Fin <input id="t_end" value="${turno.end||''}"></label>
-        </div>
-        <label>Días (L,M,X,J,V) <input id="t_days" value="${(turno.days||[]).join(',')}"></label>
-        <label>Área <input id="t_area" value="${turno.area||''}"></label>
-        <label>Asignado a (id usuario) <input id="t_assigned" value="${turno.assignedTo||''}"></label>
-        <div style="display:flex;gap:8px">
-          <button class="btn" onclick="updateTurn(${id})">Guardar cambios</button>
-          <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
-        </div>
-      </div>`;
-  }catch(e){
-    alert('Error al cargar turno para editar');
+function importExcel(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    const data=new Uint8Array(e.target.result);
+    const wb=XLSX.read(data,{type:'array'});
+    const turns=XLSX.utils.sheet_to_json(wb.Sheets['Turnos']||{});
+    const reqs=XLSX.utils.sheet_to_json(wb.Sheets['Solicitudes']||{});
+    if(turns.length) db.turns=turns;
+    if(reqs.length) db.requests=reqs;
+    saveDB();
+    alert('✅ Datos importados correctamente');
     loadTurnsView();
-  }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
-async function updateTurn(id){
-  const body={name:val('t_name'),start:val('t_start'),end:val('t_end'),
-    days:(val('t_days')||'').split(',').map(s=>s.trim()).filter(Boolean),
-    area:val('t_area'),assignedTo:val('t_assigned')||null};
-  await api('/api/turns/'+id,'PUT',body);
-  alert('Turno actualizado correctamente.');
-  loadTurnsView();
-}
-
-async function deleteTurn(id){
-  if(confirm('¿Eliminar turno #'+id+'?')){
-    await api('/api/turns/'+id,'DELETE');
-    alert('Turno eliminado.');
-    loadTurnsView();
-  }
-}
-
-// === Inicialización ===
+// === NAV ===
 document.getElementById('btnLogin').onclick=()=>login(val('loginUser'),val('loginPass'));
 document.getElementById('btnDemo').onclick=()=>login('admin','admin');
 document.getElementById('btnLogout').onclick=logout;
 document.getElementById('navTurns').onclick=loadTurnsView;
-document.getElementById('navRequests').onclick=()=>alert('Vista solicitudes');
-document.getElementById('navAdmin').onclick=loadTurnsView;
+document.getElementById('navRequests').onclick=loadRequests;
+document.getElementById('navCalendar').onclick=loadCalendarView;
+document.getElementById('navAdmin').onclick=showAdminPanel;
+
+function val(id){return document.getElementById(id).value.trim();}
+
 (async()=>{if(loadToken())try{await afterLogin();}catch{logout();}else showLogin();})();
 </script>
 </body>
