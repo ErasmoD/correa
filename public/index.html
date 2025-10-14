@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ReAsignaTurnos · Demo</title>
+<style>
+  :root { --accent:#2b7cff; --bg:#f6f8fb; --card:#ffffff; --danger:#e55353; }
+  body{ margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:var(--bg); color:#111;}
+  header{ background:var(--accent); color:white; padding:14px 16px; display:flex; align-items:center; gap:12px;}
+  header h1{ font-size:18px; margin:0; }
+  main{ padding:14px; max-width:900px; margin:0 auto;}
+  .card{ background:var(--card); border-radius:10px; padding:12px; box-shadow:0 6px 18px rgba(20,30,40,0.06); margin-bottom:12px;}
+  label{ display:block; font-size:13px; margin-bottom:6px; }
+  input,select,textarea,button{ width:100%; padding:10px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box; font-size:14px;}
+  .row{ display:flex; gap:8px; }
+  .row > *{ flex:1; }
+  .muted{ color:#666; font-size:13px; }
+  .turn{ border-left:4px solid var(--accent); padding:10px; margin-bottom:8px; border-radius:6px; background:#fff; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .small{ font-size:13px; color:#444; }
+  .btn{ background:var(--accent); color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer;}
+  .btn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .btn.danger{ background:var(--danger); }
+  footer{ text-align:center; color:#777; font-size:13px; margin-top:8px;}
+  nav{ display:flex; gap:8px; margin-bottom:10px; }
+  nav button{ padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:white; }
+  @media(min-width:700px){ header h1{ font-size:20px } .card{ padding:18px } }
+</style>
+</head>
+<body>
+<header>
+  <div style="width:40px;height:40px;border-radius:8px;background:white;color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700">RT</div>
+  <h1>ReAsignaTurnos (Demo)</h1>
+</header>
+
+<main>
+  <!-- Login -->
+  <div id="loginView" class="card">
+    <h2>Iniciar sesión</h2>
+    <p class="muted">Usa admin/admin (administrador) o user1/pass1 (empleado).</p>
+    <label>Usuario
+      <input id="loginUser" type="text" placeholder="usuario">
+    </label>
+    <label>Contraseña
+      <input id="loginPass" type="password" placeholder="contraseña">
+    </label>
+    <div style="display:flex;gap:8px;">
+      <button id="btnLogin" class="btn">Entrar</button>
+      <button id="btnDemo" class="btn ghost">Entrar como demo</button>
+    </div>
+    <div id="loginError" style="display:none;color:var(--danger);margin-top:8px;"></div>
+  </div>
+
+  <!-- App -->
+  <div id="appView" style="display:none;">
+    <div class="card" id="meCard">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div id="meName" style="font-weight:700"></div>
+          <div id="meRole" class="muted small"></div>
+        </div>
+        <div>
+          <button id="btnLogout" class="btn ghost">Cerrar sesión</button>
+        </div>
+      </div>
+    </div>
+
+    <nav>
+      <button id="navTurns">Mis turnos</button>
+      <button id="navRequests">Solicitudes</button>
+      <button id="navAdmin" style="display:none">Panel Admin</button>
+    </nav>
+
+    <div id="content"></div>
+
+  </div>
+
+  <footer class="muted">Demo creado a partir del PDF de la actividad de Arquitectura de Software.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js"></script>
+<script>
+const API = window.location.origin;
+let state = { token: null, user: null };
+
+function setToken(t) {
+  state.token = t;
+  if (t) localStorage.setItem('rt_token', t);
+  else localStorage.removeItem('rt_token');
+}
+function loadToken() {
+  const t = localStorage.getItem('rt_token');
+  if (t) { state.token = t; return true; }
+  return false;
+}
+async function api(path, method='GET', body) {
+  const headers = { 'Content-Type':'application/json' };
+  if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) { logout(); throw new Error('No autorizado'); }
+  const j = await res.json();
+  if (!res.ok) throw j;
+  return j;
+}
+
+// UI helpers
+function showLogin() {
+  document.getElementById('loginView').style.display = 'block';
+  document.getElementById('appView').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('appView').style.display = 'block';
+}
+
+// === LOGIN ===
+async function login(username, password) {
+  try {
+    const r = await api('/api/login', 'POST', { username, password });
+    setToken(r.token);
+    state.user = r.user;
+    await afterLogin();
+  } catch(e) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginError').innerText = e.error || (e.message || 'Error login');
+  }
+}
+
+async function afterLogin() {
+  try {
+    const me = await api('/api/me');
+    state.user = me;
+    document.getElementById('meName').innerText = me.name || me.username;
+    document.getElementById('meRole').innerText = me.role === 'admin' ? 'Administrador' : 'Empleado';
+    document.getElementById('navAdmin').style.display = (me.role === 'admin') ? 'inline-block' : 'none';
+    showApp();
+    loadTurnsView();
+  } catch(e) {
+    console.error(e);
+    logout();
+  }
+}
+
+function logout() {
+  setToken(null);
+  state.user = null;
+  showLogin();
+}
+
+// === CALENDARIO ===
+function renderCalendar(turns) {
+  const content = document.getElementById('calendarContainer');
+  content.innerHTML = `<div class="card"><h3>Calendario de Turnos</h3><div id="calendar"></div></div>`;
+  const calendarEl = document.getElementById('calendar');
+  const events = turns.map(t => ({
+    title: t.name + (t.area ? ' · ' + t.area : ''),
+    start: t.startDate || t.start,
+    end: t.endDate || t.end,
+    extendedProps: t
+  }));
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    height: 'auto',
+    locale: 'es',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,listWeek'
+    },
+    events,
+    eventClick: function(info) {
+      const t = info.event.extendedProps;
+      alert(`Turno: ${t.name}\nÁrea: ${t.area || '-'}\nHorario: ${t.start} - ${t.end}\nDías: ${(t.days||[]).join(', ')}`);
+    }
+  });
+  calendar.render();
+}
+
+// === TURNOS (VISTA PRINCIPAL) ===
+async function loadTurnsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="card"><h3>Turnos</h3><p class="muted">Cargando...</p></div>';
+  try {
+    let turns;
+    if (state.user.role === 'admin') {
+      turns = await api('/api/turns');
+    } else {
+      turns = await api('/api/turns?assignedTo=' + encodeURIComponent(state.user.id));
+    }
+
+    let html = `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Turnos asignados</h3>
+        ${state.user.role === 'admin' ? '<button class="btn" onclick="showCreateTurn()">➕ Nuevo turno</button>' : ''}
+      </div>`;
+
+    if (!turns.length) html += '<p class="muted">No hay turnos asignados.</p>';
+
+    turns.forEach(t => {
+      html += `
+        <div class="turn">
+          <div>
+            <div style="font-weight:700">${t.name || 'Sin nombre'}</div>
+            <div class="small">${t.start} - ${t.end} · ${t.area || ''}</div>
+            <div class="muted small">Días: ${t.days ? t.days.join(', ') : '-'}</div>
+          </div>
+          <div style="min-width:140px;text-align:right">`;
+
+      if (state.user.role === 'admin') {
+        html += `
+          <button class="btn" onclick="showEditTurn(${t.id})">Editar</button>
+          <div style="height:8px"></div>
+          <button class="btn danger" onclick="deleteTurn(${t.id})">Borrar</button>`;
+      } else if (t.assignedTo) {
+        html += `
+          <button class="btn" onclick="confirmTurn(${t.id})">Confirmar</button>
+          <div style="height:8px"></div>
+          <button class="btn ghost" onclick="showRequestForm(${t.id})">Solicitar cambio</button>`;
+      } else {
+        html += `<div class="muted small">No asignado</div>`;
+      }
+
+      html += `</div></div>`;
+    });
+
+    html += `</div><div style="margin-top:20px" id="calendarContainer"></div>`;
+    content.innerHTML = html;
+    renderCalendar(turns);
+
+  } catch(e) {
+    content.innerHTML = '<div class="card"><p class="muted">Error al cargar turnos.</p></div>';
+  }
+}
+
+// === CREAR TURNO ===
+function showCreateTurn() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="card">
+      <h3>Nuevo turno</h3>
+      <label>Nombre <input id="t_name" placeholder="Ej. Turno mañana"></label>
+      <div class="row">
+        <label>Inicio <input id="t_start" placeholder="2025-10-13T06:00"></label>
+        <label>Fin <input id="t_end" placeholder="2025-10-13T14:00"></label>
+      </div>
+      <label>Días (separados por comas) <input id="t_days" placeholder="L,M,X,J,V"></label>
+      <label>Área <input id="t_area" placeholder="Ej. Producción"></label>
+      <label>Asignado a (id de usuario, opcional) <input id="t_assigned" placeholder="Ej. 3"></label>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn" onclick="createTurn()">Guardar</button>
+        <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
+      </div>
+    </div>
+  `;
+}
+async function createTurn() {
+  const body = {
+    name: document.getElementById('t_name').value.trim(),
+    start: document.getElementById('t_start').value.trim(),
+    end: document.getElementById('t_end').value.trim(),
+    days: (document.getElementById('t_days').value || '').split(',').map(s=>s.trim()).filter(Boolean),
+    area: document.getElementById('t_area').value.trim(),
+    assignedTo: document.getElementById('t_assigned').value ? Number(document.getElementById('t_assigned').value) : null,
+    status: 'active'
+  };
+  if (!body.name || !body.start || !body.end) {
+    alert('Por favor completa los campos obligatorios.');
+    return;
+  }
+  try {
+    await api('/api/turns','POST',body);
+    alert('Turno creado correctamente.');
+    loadTurnsView();
+  } catch(e) { alert(e.error || 'Error al crear el turno.'); }
+}
+
+// === BORRAR TURNO ===
+async function deleteTurn(id) {
+  if (!confirm('¿Eliminar turno #' + id + '?')) return;
+  try {
+    await api('/api/turns/' + id, 'DELETE');
+    alert('Turno eliminado.');
+    loadTurnsView();
+  } catch(e) { alert(e.error || 'Error al eliminar turno.'); }
+}
+
+// === EDITAR TURNO ===
+async function showEditTurn(id) {
+  try {
+    const turns = await api('/api/turns');
+    const t = turns.find(x=>x.id===id);
+    if (!t) return alert('No encontrado');
+    const content = document.getElementById('content');
+    content.innerHTML = `
+      <div class="card">
+        <h3>Editar turno #${t.id}</h3>
+        <label>Nombre <input id="t_name" value="${t.name || ''}"></label>
+        <div class="row"><label>Inicio <input id="t_start" value="${t.start || ''}"></label><label>Fin <input id="t_end" value="${t.end || ''}"></label></div>
+        <label>Días (coma separado) <input id="t_days" value="${(t.days||[]).join(',')}"></label>
+        <label>Área <input id="t_area" value="${t.area||''}"></label>
+        <label>Asignado a (id usuario, opcional) <input id="t_assigned" value="${t.assignedTo||''}"></label>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="saveEdit(${t.id})">Guardar</button><button class="btn ghost" onclick="loadTurnsView()">Cancelar</button></div>
+      </div>
+    `;
+  } catch(e) { alert('Error'); }
+}
+async function saveEdit(id) {
+  const body = {
+    name: document.getElementById('t_name').value,
+    start: document.getElementById('t_start').value,
+    end: document.getElementById('t_end').value,
+    days: (document.getElementById('t_days').value || '').split(',').map(s=>s.trim()).filter(Boolean),
+    area: document.getElementById('t_area').value,
+    assignedTo: document.getElementById('t_assigned').value ? Number(document.getElementById('t_assigned').value) : null
+  };
+  try {
+    await api('/api/turns/' + id, 'PUT', body);
+    alert('Guardado.');
+    loadTurnsView();
+  } catch(e) { alert(e.error || 'Error'); }
+}
+
+// === SOLICITUDES (Sin cambios importantes) ===
+async function loadRequestsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="card"><h3>Solicitudes</h3><p class="muted">Cargando...</p></div>';
+  try {
+    const reqs = await api('/api/requests');
+    let html = '<div class="card"><h3>Solicitudes</h3>';
+    if (!reqs.length) html += '<p class="muted">Sin solicitudes.</p>';
+    reqs.forEach(r => {
+      html += `<div style="padding:8px;border-bottom:1px solid #eee"><div style="display:flex;justify-content:space-between"><div><strong>ID ${r.id}</strong> · Turno ${r.turnId}</div><div class="muted small">${r.status}</div></div>
+        <div class="muted small">Solicitante: ${r.requesterId} · ${new Date(r.createdAt).toLocaleString()}</div>
+        <div style="margin-top:6px">${r.reason || '<span class="muted">sin motivo</span>'}</div>
+        <div style="margin-top:8px">`;
+      if (state.user.role === 'admin' && r.status === 'pending') {
+        html += `<button class="btn" onclick="decideRequest(${r.id},'approve')">Aprobar</button><button class="btn ghost" style="margin-left:8px" onclick="decideRequest(${r.id},'reject')">Rechazar</button>`;
+      } else {
+        if (r.adminComment) html += `<div class="muted small">Admin: ${r.adminComment}</div>`;
+      }
+      html += `</div></div>`;
+    });
+    html += '</div>';
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = '<div class="card"><p class="muted">Error al cargar solicitudes.</p></div>';
+  }
+}
+async function decideRequest(id, decision) {
+  const comment = prompt('Comentario (opcional):') || '';
+  try {
+    await api('/api/requests/' + id + '/decision', 'POST', { decision, comment });
+    alert('Hecho.');
+    loadRequestsView();
+  } catch(e) { alert(e.error || 'Error'); }
+}
+
+// === Inicialización ===
+document.getElementById('btnLogin').onclick = () => {
+  login(document.getElementById('loginUser').value, document.getElementById('loginPass').value);
+};
+document.getElementById('btnDemo').onclick = () => { login('admin','admin'); };
+document.getElementById('btnLogout').onclick = logout;
+document.getElementById('navTurns').onclick = loadTurnsView;
+document.getElementById('navRequests').onclick = loadRequestsView;
+document.getElementById('navAdmin').onclick = loadTurnsView;
+
+// Auto-login si hay token
+(async function(){
+  if (loadToken()) {
+    try { await afterLogin(); } catch { logout(); }
+  } else showLogin();
+})();
+</script>
+</body>
+</html>

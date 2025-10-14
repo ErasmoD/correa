@@ -1,0 +1,62 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "admin",
+      "role": "admin",
+      "name": "Administrador"
+    },
+    {
+      "id": 2,
+      "username": "user1",
+      "password": "pass1",
+      "role": "employee",
+      "name": "Operador 1"
+    },
+    {
+      "id": 3,
+      "username": "user2",
+      "password": "pass2",
+      "role": "employee",
+      "name": "Operador 2"
+    }
+  ],
+  "turns": [
+    {
+      "id": 1,
+      "name": "Turno Mañana",
+      "start": "06:00",
+      "end": "14:00",
+      "days": [
+        "L",
+        "M",
+        "X",
+        "J",
+        "V"
+      ],
+      "area": "Ruta A",
+      "assignedTo": 2,
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "name": "pito ",
+      "start": "",
+      "end": "",
+      "days": [
+        "l",
+        "m",
+        "m",
+        "j",
+        "v",
+        "s",
+        "d"
+      ],
+      "area": "come penes",
+      "assignedTo": 123,
+      "status": "active"
+    }
+  ],
+  "requests": []
+}
