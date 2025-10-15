@@ -70,7 +70,7 @@
     <div id="content"></div>
   </div>
 
-  <footer class="muted">Demo creada para la actividad de Arquitectura de Software.</footer>
+ 
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js"></script>
@@ -168,6 +168,48 @@ async function loadTurnsView(){
         : `<button class="btn ghost" onclick="requestChange(${t.id})">Solicitar cambio</button>`}
       </div>
     </div>`).join('');
+}
+
+/* === EDITAR Y BORRAR === */
+async function showEditTurn(id){
+  const t=db.turns.find(x=>x.id===id);
+  if(!t) return alert('Turno no encontrado');
+  const c=document.getElementById('content');
+  c.innerHTML=`
+  <div class="card">
+    <h3>Editar turno</h3>
+    <label>Nombre<input id="editName" value="${t.name}"></label>
+    <div class="row">
+      <label>Inicio<input id="editStart" value="${t.start}" type="time"></label>
+      <label>Fin<input id="editEnd" value="${t.end}" type="time"></label>
+    </div>
+    <label>Área<input id="editArea" value="${t.area||''}"></label>
+    <label>Días (separa por comas)<input id="editDays" value="${(t.days||[]).join(',')}"></label>
+    <div class="row">
+      <button class="btn" onclick="saveTurn(${t.id})">Guardar</button>
+      <button class="btn ghost" onclick="loadTurnsView()">Cancelar</button>
+    </div>
+  </div>`;
+}
+
+async function saveTurn(id){
+  const name=document.getElementById('editName').value.trim();
+  const start=document.getElementById('editStart').value.trim();
+  const end=document.getElementById('editEnd').value.trim();
+  const area=document.getElementById('editArea').value.trim();
+  const days=document.getElementById('editDays').value.split(',').map(x=>x.trim()).filter(x=>x);
+
+  if(!name||!start||!end) return alert('Completa todos los campos requeridos');
+  await api('/api/turns/'+id,'PUT',{name,start,end,area,days});
+  alert('✅ Turno actualizado');
+  loadTurnsView();
+}
+
+async function deleteTurn(id){
+  if(!confirm('¿Seguro que deseas eliminar este turno?')) return;
+  await api('/api/turns/'+id,'DELETE');
+  alert('🗑️ Turno eliminado');
+  loadTurnsView();
 }
 
 /* === NUEVO: FORMULARIO DE SOLICITUD === */
